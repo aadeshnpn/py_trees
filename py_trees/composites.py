@@ -625,22 +625,17 @@ class Parallel(Composite):
 
 class RepeatUntilFalse(Composite):
     """
-    Sequences are the factory lines of Behaviour Trees
+    Repeat Until False is a composite behavior that can be useful for sub-trees
 
-    .. graphviz:: dot/sequence.dot
-
-    A sequence will progressively tick over each of its children so long as
+    It is like a sequence will progressively tick over each of its children so long as
     each child returns :data:`~py_trees.common.Status.SUCCESS`. If any child returns
-    :data:`~py_trees.common.Status.FAILURE` or :data:`~py_trees.common.Status.RUNNING` the sequence will halt and the parent will adopt
-    the result of this child. If it reaches the last child, it returns with
-    that result regardless.
+    :data:`~py_trees.common.Status.FAILURE` or :data:`~py_trees.common.Status.RUNNING` the repeat will halt and the parent will adopt
+    the result of this child. If it reaches the last child, again the sub-tree is processed
 
     .. note::
 
-       The sequence halts once it sees a child is RUNNING and then returns
+       The repeat halts once it sees a child is RUNNING and then returns
        the result. *It does not get stuck in the running behaviour*.
-
-    .. seealso:: The :ref:`py-trees-demo-sequence-program` program demos a simple sequence in action.
 
     Args:
         name (:obj:`str`): the composite behaviour name
@@ -702,7 +697,7 @@ class RepeatUntilFalse(Composite):
 
     def stop(self, new_status=Status.INVALID):
         """
-        Stopping a sequence requires taking care of the current index. Note that
+        Stopping a repeat requires taking care of the current index. Note that
         is important to implement this here intead of terminate, so users are free
         to subclass this easily with their own terminate and not have to remember
         that they need to call this function manually.

@@ -616,3 +616,103 @@ class Parallel(Composite):
                     return child
         else:
             return self.children[-1]
+
+
+
+##############################################################################
+# Repeat until False
+##############################################################################
+
+
+class RepeatUntilFalse(Composite):
+    """
+    Sequences are the factory lines of Behaviour Trees
+
+    .. graphviz:: dot/sequence.dot
+
+    A sequence will progressively tick over each of its children so long as
+    each child returns :data:`~py_trees.common.Status.SUCCESS`. If any child returns
+    :data:`~py_trees.common.Status.FAILURE` or :data:`~py_trees.common.Status.RUNNING` the sequence will halt and the parent will adopt
+    the result of this child. If it reaches the last child, it returns with
+    that result regardless.
+
+    .. note::
+
+       The sequence halts once it sees a child is RUNNING and then returns
+       the result. *It does not get stuck in the running behaviour*.
+
+    .. seealso:: The :ref:`py-trees-demo-sequence-program` program demos a simple sequence in action.
+
+    Args:
+        name (:obj:`str`): the composite behaviour name
+        children ([:class:`~py_trees.behaviour.Behaviour`]): list of children to add
+        *args: variable length argument list
+        **kwargs: arbitrary keyword arguments
+
+    """
+    def __init__(self, name="Repeat", children=None, *args, **kwargs):
+        super(RepeatUntilFalse, self).__init__(name, children, *args, **kwargs)
+        self.current_index = -1  # -1 indicates uninitialised
+
+    def tick(self):
+        """
+        Tick over the children.
+
+        Yields:
+            :class:`~py_trees.behaviour.Behaviour`: a reference to itself or one of its children
+        """
+        while True:        
+            self.logger.debug("%s.tick()" % self.__class__.__name__)
+            if self.status != Status.RUNNING:
+                self.logger.debug("%s.tick() [resetting]" % self.__class__.__name__)
+                # sequence specific handling
+                self.current_index = 0
+                for child in self.children:
+                    # reset the children, this helps when introspecting the tree
+                    if child.status != Status.INVALID:
+                        child.stop(Status.INVALID)
+                # subclass (user) handling
+                self.initialise()
+            # run any work designated by a customised instance of this class
+            self.update()
+
+            for child in itertools.islice(self.children, self.current_index, None):
+                for node in child.tick():
+                    yield node
+                    if node is child and node.status != Status.SUCCESS:
+                        self.status = node.status
+                        yield self
+                        return
+                self.current_index += 1
+        # At this point, all children are happy with their SUCCESS, so we should be happy too
+        self.current_index -= 1  # went off the end of the list if we got to here
+        self.stop(Status.SUCCESS)
+        yield self
+
+    @property
+    def current_child(self):
+        """
+        Have to check if there's anything actually running first.
+
+        Returns:
+            :class:`~py_trees.behaviour.Behaviour`: the child that is currently running, or None
+        """
+        if self.current_index == -1:
+            return None
+        return self.children[self.current_index] if self.children else None
+
+    def stop(self, new_status=Status.INVALID):
+        """
+        Stopping a sequence requires taking care of the current index. Note that
+        is important to implement this here intead of terminate, so users are free
+        to subclass this easily with their own terminate and not have to remember
+        that they need to call this function manually.
+
+        Args:
+            new_status (:class:`~py_trees.common.Status`): the composite is transitioning to this new status
+        """
+        # retain information about the last running child if the new status is
+        # SUCCESS or FAILURE
+        if new_status == Status.INVALID:
+            self.current_index = -1
+        Composite.stop(self, new_status)
